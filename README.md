@@ -2,7 +2,7 @@
 
 ## 简介
 
-这个 Demo 装在真机上会列出两类来源的「文字转语音」引擎：一是用 `PackageManager` 按系统标准动作 `android.intent.action.TTS_SERVICE` 去查所有声明了的 `Service`；二是框架提供的 `TextToSpeech.getEngines()`。两者对照着看，更容易理解为什么有的 App 列表里没有某个引擎（例如未声明包可见性、或引擎没按标准暴露 Service），而另一些阅读类 App 仍能用厂商能力。
+这个 Demo 装在真机上提供一个极简界面：用 `TextToSpeech.getEngines()` 填引擎下拉框，任选其一，对可编辑的中英文混合示例文本进行朗读，并用滑块调节语速。清单里仍保留对 `TTS_SERVICE` 的 `<queries>` 声明（Android 11+ 包可见性），与系统「文字转语音」能力一致。
 
 ## 快速开始
 
@@ -24,7 +24,7 @@
 
 `app/build/outputs/apk/debug/app-debug.apk`
 
-安装后桌面应用名是 **「TTS 引擎列表」**（可在 `app/src/main/res/values/strings.xml` 里改 `app_name`）。
+安装后桌面应用名是 **「TTS 试听」**（可在 `app/src/main/res/values/strings.xml` 里改 `app_name`）。
 
 ## 概念讲解
 
@@ -68,11 +68,10 @@
 
 核心逻辑在 `app/src/main/java/com/example/ttsenginediscovery/MainActivity.kt`：
 
-- `queryPackageManagerEngines()`：解析 `TTS_SERVICE`，合并 `GET_META_DATA` 与（API 24+）带 `MATCH_DISABLED_COMPONENTS` 的查询结果，按包名与服务名去重后展示。
-- `queryFrameworkEngines()`：构造 `TextToSpeech(this) { }`，读取 `engines` 后立即 `shutdown()`。
-- 第三段列表：**仅在 PackageManager 里出现的包名、却不在 `getEngines()` 里**，方便你重点核对（例如讯飞语记是否暴露标准接口、是否需进系统设置启用）。
+- `queryFrameworkEngines()`：构造 `TextToSpeech(this) { }`，读取 `engines` 后立即 `shutdown()`，排序后填入 `Spinner`。
+- `TextToSpeech(context, listener, 包名)`：按在下拉框中选中的引擎初始化并 `speak`；语速由 `setSpeechRate` 控制。
 
-界面用 `RecyclerView` 分节展示；按钮「打开 TTS 设置」会依次尝试常见厂商的 Intent，失败则提示用户进系统设置搜索「文字转语音」。
+界面仅保留「重新扫描」「打开 TTS 设置」、引擎下拉、大字号多行输入、语速滑块与「朗读 / 停止」按钮。「打开 TTS 设置」会依次尝试常见厂商的 Intent，失败则提示进系统设置搜索「文字转语音」。
 
 ## 注意事项
 
@@ -81,8 +80,8 @@
 
 ## 完整讲解（中文）
 
-这个小程序要解决的其实是一件事：**我到底能看见哪些「给系统当朗读引擎」的应用？** Android 把这类能力收拢在一个固定的 Intent 动作上：`android.intent.action.TTS_SERVICE`。凡是正经按文档做的第三方 TTS，一般会在自己的 `AndroidManifest.xml` 里声明一个继承 `TextToSpeechService`（或符合合同）的 `Service`，并挂上这个动作。我们的第一个列表就是用 `PackageManager` 去「问系统：谁声明了这个 Service？」——问得越完整（含 `<queries>`、必要时带禁用组件标志），你看到的第三方就越多。
+Android 把「朗读引擎」能力收拢在 Intent 动作 `android.intent.action.TTS_SERVICE` 上。第三方 TTS 一般在 `AndroidManifest.xml` 里声明符合合同的 `Service` 并挂上该动作。若用 `PackageManager.queryIntentServices` 自行枚举，问得越完整（含 `<queries>`、必要时带 `MATCH_DISABLED_COMPONENTS`），能看见的已安装候选就越多；本 Demo 的主界面则直接使用框架筛选后的 `TextToSpeech.getEngines()`。
 
-第二个列表走的是 **`TextToSpeech` 框架**。它已经帮你在系统里做过筛选和排序，返回的是「框架认为可以当成引擎切换项」的那批。现实里会出现「PackageManager 能看见某个包，`getEngines()` 却没有」——这往往意味着：应用装了、甚至注册了 Service，但没有完全走入系统认可的那条产品线，或者用户从未在系统界面里启用过它。第三个区块把差集单独列出来，就是让你一眼盯住这种「灰色地带」。
+下文「第二部分」仍介绍 `PackageManager` 与 `getEngines()` 的差异，便于排查「为什么某个引擎在系统里能读、却不在你的下拉框里」：通常只有出现在 **`getEngines()`** 里的包名才能用 `TextToSpeech(..., engine)` 绑定试听。
 
-最后提醒一点：**包可见性** 是 Android 11 之后非常容易踩的坑。你之前遇到「阅读软件能用讯飞、自己的小工具却列不出来」，第一件事应该是对照本 Demo 检查清单里有没有 `<queries>`；第二件事才是去怀疑讯飞有没有公开标准 TTS Service、或者是否要走厂商文档里的别的集成方式。这个仓库把路径写死、列表写实，就是想让你少在「是不是我代码写错了」上绕圈，多把时间花在「系统到底公开了哪些引擎」这件可被验证的事实上。
+**包可见性** 仍是 Android 11+ 的常见坑：若你扩展为自行枚举 `queryIntentServices(TTS_SERVICE)`，清单里需要 `<queries>`，否则第三方包会从查询结果里消失。

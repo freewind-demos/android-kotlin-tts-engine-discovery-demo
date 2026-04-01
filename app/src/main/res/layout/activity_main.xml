@@ -1,47 +1,113 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical">
-
-    <TextView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:background="?attr/colorPrimaryDark"
-        android:padding="12dp"
-        android:text="@string/hint_banner"
-        android:textAppearance="?attr/textAppearanceBodySmall"
-        android:textColor="@android:color/white"
-        tools:text="banner" />
+    android:fillViewport="true"
+    android:padding="12dp">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:padding="8dp">
+        android:orientation="vertical">
 
-        <Button
-            android:id="@+id/buttonRefresh"
-            android:layout_width="0dp"
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginEnd="8dp"
-            android:layout_weight="1"
-            android:text="@string/action_refresh" />
+            android:orientation="horizontal">
 
-        <Button
-            android:id="@+id/buttonTtsSettings"
-            android:layout_width="0dp"
+            <Button
+                android:id="@+id/buttonRefresh"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="8dp"
+                android:layout_weight="1"
+                android:minHeight="56dp"
+                android:text="@string/action_refresh"
+                android:textSize="18sp" />
+
+            <Button
+                android:id="@+id/buttonTtsSettings"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:minHeight="56dp"
+                android:text="@string/action_open_tts_settings"
+                android:textSize="18sp" />
+        </LinearLayout>
+
+        <android.widget.Spinner
+            android:id="@+id/spinnerEngine"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="@string/action_open_tts_settings" />
+            android:layout_marginTop="12dp"
+            android:minHeight="56dp"
+            android:paddingVertical="8dp" />
+
+        <EditText
+            android:id="@+id/editSampleText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:gravity="top|start"
+            android:importantForAutofill="no"
+            android:inputType="textMultiLine|textCapSentences"
+            android:lineSpacingMultiplier="1.15"
+            android:minHeight="220dp"
+            android:padding="16dp"
+            android:text="@string/demo_speak_text"
+            android:textSize="20sp"
+            tools:text="Sample" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/textRateLabel"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:textSize="20sp"
+                tools:text="1.00×" />
+
+            <SeekBar
+                android:id="@+id/seekSpeechRate"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="2"
+                android:max="100"
+                android:minHeight="48dp"
+                android:progress="33" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/buttonSpeak"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="8dp"
+                android:layout_weight="1"
+                android:minHeight="56dp"
+                android:text="@string/action_speak"
+                android:textSize="18sp" />
+
+            <Button
+                android:id="@+id/buttonStopSpeak"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:minHeight="56dp"
+                android:text="@string/action_stop_speak"
+                android:textSize="18sp" />
+        </LinearLayout>
     </LinearLayout>
-
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/recycler"
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
-        android:clipToPadding="false"
-        android:paddingBottom="16dp" />
-</LinearLayout>
+</ScrollView>

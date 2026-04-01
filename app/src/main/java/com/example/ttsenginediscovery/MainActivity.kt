@@ -1,173 +1,135 @@
 package com.example.ttsenginediscovery
 
 import android.content.Intent
-import android.content.pm.PackageManager
-import android.content.pm.ResolveInfo
-import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.speech.tts.TextToSpeech
+import android.widget.ArrayAdapter
+import android.widget.SeekBar
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import androidx.recyclerview.widget.LinearLayoutManager
 import com.example.ttsenginediscovery.databinding.ActivityMainBinding
+import java.util.Locale
 
-/**
- * Lists TTS engines via:
- * 1) [PackageManager.queryIntentServices] for [TextToSpeech.Engine.INTENT_ACTION_TTS_SERVICE]
- *    (with [MATCH_DISABLED_COMPONENTS] on N+ so disabled components still appear).
- * 2) [TextToSpeech.getEngines] after constructing [TextToSpeech].
- *
- * Android 11+: third-party engines require `<queries><intent><action name="android.intent.action.TTS_SERVICE"/></intent></queries>`
- * or they will not show up in (1) — a common reason apps "miss" engines like 讯飞语记 while Legado still works
- * (Legado may declare queries, use a shared user id, or integrate via other APIs).
- */
+/** 选择系统已暴露的 TTS 引擎（[TextToSpeech.getEngines]），试听朗读与语速。 */
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
-    private val adapter = EngineRowsAdapter()
+    private var frameworkEngines: List<TextToSpeech.EngineInfo> = emptyList()
+    private var tts: TextToSpeech? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        binding.recycler.layoutManager = LinearLayoutManager(this)
-        binding.recycler.adapter = adapter
-
-        binding.buttonRefresh.setOnClickListener { loadAll() }
+        binding.buttonRefresh.setOnClickListener { loadEngines() }
         binding.buttonTtsSettings.setOnClickListener { openTtsSettings() }
 
-        loadAll()
+        binding.seekSpeechRate.setOnSeekBarChangeListener(
+            object : SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                    updateRateLabel(progress)
+                }
+
+                override fun onStartTrackingTouch(seekBar: SeekBar?) {}
+                override fun onStopTrackingTouch(seekBar: SeekBar?) {}
+            },
+        )
+        updateRateLabel(binding.seekSpeechRate.progress)
+
+        binding.buttonSpeak.setOnClickListener { speakWithSelectedEngine() }
+        binding.buttonStopSpeak.setOnClickListener { stopSpeaking() }
+
+        loadEngines()
     }
 
-    private fun loadAll() {
-        val pmEngines = queryPackageManagerEngines()
-        val frameworkEngines = queryFrameworkEngines()
-        val fwPackages = frameworkEngines.map { it.name }.toSet()
-        val pmPackages = pmEngines.map { it.packageName }.distinct()
-        val onlyInPm = pmPackages.filter { it !in fwPackages }.sorted()
-
-        val rows = buildList {
-            add(EngineRow.Section(getString(R.string.section_pm)))
-            if (pmEngines.isEmpty()) {
-                add(EngineRow.Engine("（无）", "未解析到 TTS Service。请检查是否缺少 manifest queries。"))
-            } else {
-                pmEngines.forEach { e ->
-                    add(
-                        EngineRow.Engine(
-                            title = e.label,
-                            subtitle = buildString {
-                                append("包名: ").append(e.packageName).append('\n')
-                                append("Service: ").append(e.serviceClassName).append('\n')
-                                append("组件 enabled: ").append(e.serviceEnabled).append('\n')
-                                append("查询方式: ").append(e.queryNote)
-                            },
-                        ),
-                    )
-                }
-            }
-
-            add(EngineRow.Section(getString(R.string.section_framework)))
-            if (frameworkEngines.isEmpty()) {
-                add(EngineRow.Engine("（无）", "TextToSpeech.getEngines() 为空或初始化失败。"))
-            } else {
-                frameworkEngines
-                    .sortedBy { it.label?.toString() ?: it.name }
-                    .forEach { info ->
-                        add(
-                            EngineRow.Engine(
-                                title = info.label?.toString() ?: info.name,
-                                subtitle = "engine name（通常等于引擎包名）: ${info.name}",
-                            ),
-                        )
-                    }
-            }
-
-            add(EngineRow.Section(getString(R.string.section_only_pm)))
-            if (onlyInPm.isEmpty()) {
-                add(EngineRow.Engine(getString(R.string.section_empty_diff), ""))
-            } else {
-                onlyInPm.forEach { pkg ->
-                    val svcs = pmEngines.filter { it.packageName == pkg }
-                    add(
-                        EngineRow.Engine(
-                            title = pkg,
-                            subtitle = svcs.joinToString("\n") {
-                                "${it.serviceClassName} · enabled=${it.serviceEnabled} · ${it.queryNote}"
-                            },
-                        ),
-                    )
-                }
-            }
-        }
-
-        adapter.submitList(rows)
+    override fun onDestroy() {
+        releaseTts()
+        super.onDestroy()
     }
 
-    private data class PmEngine(
-        val packageName: String,
-        val serviceClassName: String,
-        val label: String,
-        val serviceEnabled: Boolean,
-        val queryNote: String,
-    )
-
-    private fun queryPackageManagerEngines(): List<PmEngine> {
-        val pm = packageManager
-        val intent = Intent(TextToSpeech.Engine.INTENT_ACTION_TTS_SERVICE)
-        val merged = linkedMapOf<String, PmEngine>()
-
-        fun ingest(list: List<ResolveInfo>, note: String) {
-            for (ri in list) {
-                val si = ri.serviceInfo ?: continue
-                val key = "${si.packageName}/${si.name}"
-                val title = ri.loadLabel(pm).toString()
-                val row = PmEngine(
-                    packageName = si.packageName,
-                    serviceClassName = si.name,
-                    label = title,
-                    serviceEnabled = si.enabled,
-                    queryNote = note,
-                )
-                val prev = merged[key]
-                merged[key] = if (prev == null) {
-                    row
-                } else {
-                    prev.copy(
-                        queryNote = "${prev.queryNote} · $note",
-                        serviceEnabled = prev.serviceEnabled || row.serviceEnabled,
-                    )
-                }
-            }
-        }
-
-        ingest(queryIntentServicesCompat(pm, intent, PackageManager.GET_META_DATA), "GET_META_DATA")
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            ingest(
-                queryIntentServicesCompat(
-                    pm,
-                    intent,
-                    PackageManager.GET_META_DATA or PackageManager.MATCH_DISABLED_COMPONENTS,
-                ),
-                "GET_META_DATA|MATCH_DISABLED_COMPONENTS",
-            )
-        }
-
-        return merged.values.sortedWith(compareBy({ it.packageName }, { it.serviceClassName }))
+    private fun loadEngines() {
+        frameworkEngines = queryFrameworkEngines().sortedBy { it.label?.toString() ?: it.name }
+        populateEngineSpinner()
     }
 
-    private fun queryIntentServicesCompat(
-        pm: PackageManager,
-        intent: Intent,
-        flags: Int,
-    ): List<ResolveInfo> {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            pm.queryIntentServices(intent, PackageManager.ResolveInfoFlags.of(flags.toLong()))
+    private fun progressToSpeechRate(progress: Int): Float =
+        0.5f + (progress.coerceIn(0, 100) / 100f) * 1.5f
+
+    private fun updateRateLabel(progress: Int) {
+        val rate = progressToSpeechRate(progress)
+        binding.textRateLabel.text = getString(R.string.label_speech_rate, rate)
+    }
+
+    private fun populateEngineSpinner() {
+        val labels = frameworkEngines.map { info ->
+            val label = info.label?.toString().orEmpty()
+            if (label.isNotEmpty()) {
+                "$label (${info.name})"
+            } else {
+                info.name
+            }
+        }
+        val adapterSpinner = ArrayAdapter(
+            this,
+            R.layout.spinner_item_large,
+            labels,
+        ).also { it.setDropDownViewResource(R.layout.spinner_dropdown_item_large) }
+        binding.spinnerEngine.adapter = adapterSpinner
+        val hasEngines = frameworkEngines.isNotEmpty()
+        binding.spinnerEngine.isEnabled = hasEngines
+        binding.buttonSpeak.isEnabled = hasEngines
+    }
+
+    private fun speakWithSelectedEngine() {
+        if (frameworkEngines.isEmpty()) {
+            Toast.makeText(this, R.string.toast_no_engines, Toast.LENGTH_LONG).show()
+            return
+        }
+        val text = binding.editSampleText.text?.toString()?.trim().orEmpty()
+        if (text.isEmpty()) {
+            Toast.makeText(this, R.string.toast_empty_text, Toast.LENGTH_SHORT).show()
+            return
+        }
+        val pos = binding.spinnerEngine.selectedItemPosition
+        val engine = frameworkEngines.getOrNull(pos)?.name
+        val rate = progressToSpeechRate(binding.seekSpeechRate.progress)
+
+        releaseTts()
+        tts = if (engine.isNullOrEmpty()) {
+            TextToSpeech(this) { status -> onTtsReady(status, text, rate) }
         } else {
-            @Suppress("DEPRECATION")
-            pm.queryIntentServices(intent, flags)
+            TextToSpeech(this, { status -> onTtsReady(status, text, rate) }, engine)
         }
+    }
+
+    private fun onTtsReady(status: Int, text: String, rate: Float) {
+        if (status != TextToSpeech.SUCCESS) {
+            Toast.makeText(this, R.string.toast_tts_init_failed, Toast.LENGTH_LONG).show()
+            return
+        }
+        val engine = tts ?: return
+        engine.stop()
+        var lang = engine.setLanguage(Locale.forLanguageTag("zh-CN"))
+        if (lang == TextToSpeech.LANG_MISSING_DATA || lang == TextToSpeech.LANG_NOT_SUPPORTED) {
+            lang = engine.setLanguage(Locale.CHINESE)
+        }
+        if (lang == TextToSpeech.LANG_MISSING_DATA || lang == TextToSpeech.LANG_NOT_SUPPORTED) {
+            engine.setLanguage(Locale.getDefault())
+        }
+        engine.setSpeechRate(rate)
+        engine.speak(text, TextToSpeech.QUEUE_FLUSH, null, "tts-demo")
+    }
+
+    private fun stopSpeaking() {
+        tts?.stop()
+    }
+
+    private fun releaseTts() {
+        tts?.stop()
+        tts?.shutdown()
+        tts = null
     }
 
     private fun queryFrameworkEngines(): List<TextToSpeech.EngineInfo> {
