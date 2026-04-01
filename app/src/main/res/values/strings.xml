@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">TTS 引擎列表</string>
+    <string name="hint_banner">本应用同时列出：① PackageManager 查询 TTS_SERVICE 的 Service；② TextToSpeech.getEngines()。若第三方引擎（如讯飞语记）仍不出现，请确认本 App 已声明 &lt;queries&gt;&lt;intent action=TTS_SERVICE/&gt;&lt;/queries&gt;（Android 11+ 必须），并在系统「文字转语音输出」中查看。</string>
+    <string name="action_refresh">重新扫描</string>
+    <string name="action_open_tts_settings">打开 TTS 设置</string>
+    <string name="section_pm">① PackageManager · android.intent.action.TTS_SERVICE（含 MATCH_DISABLED_COMPONENTS）</string>
+    <string name="section_framework">② TextToSpeech.getEngines()（框架返回列表）</string>
+    <string name="section_only_pm">③ 仅在 ① 出现、② 未出现的包（重点核对）</string>
+    <string name="section_empty_diff">③ 无差异（① 的包均在 ② 中）</string>
+</resources>
